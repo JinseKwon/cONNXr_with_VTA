@@ -1,4 +1,4 @@
-# 🤖 cONNXr C ONNX Runtime
+# 🤖 cONNXr C ONNX Runtime with VTA
 ![macos-latest](https://github.com/alrevuelta/cONNXr/workflows/macos-latest/badge.svg) ![ubuntu-latest](https://github.com/alrevuelta/cONNXr/workflows/ubuntu-latest/badge.svg) ![windows-latest](https://github.com/alrevuelta/cONNXr/workflows/windows-latest/badge.svg)
 
 
