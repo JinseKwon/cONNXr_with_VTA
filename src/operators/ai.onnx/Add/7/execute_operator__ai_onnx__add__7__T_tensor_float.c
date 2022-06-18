@@ -29,6 +29,7 @@ execute_operator__ai_onnx__add__7__T_tensor_float(
     /* DO CALCULATION HERE */
 
     /* TODO: ugly */
+    #pragma omp parallel for
     for (int i = 0; i < o_C->n_float_data; i++) {
         /* Normal case where dimensions match */
         if (i_A->n_dims == i_B->n_dims) {

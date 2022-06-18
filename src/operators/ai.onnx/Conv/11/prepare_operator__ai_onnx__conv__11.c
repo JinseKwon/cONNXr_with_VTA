@@ -2,8 +2,10 @@
 #include "operator__ai_onnx__conv__11.h"
 #include "tracing.h"
 #include "utils.h"
+extern "C" {
+#include <stdio.h>
 #include <string.h>
-
+}
 operator_status
 prepare_operator__ai_onnx__conv__11(
     node_context *ctx
@@ -75,20 +77,20 @@ prepare_operator__ai_onnx__conv__11(
     int64_t default_strides = 1;
 
     context_operator__ai_onnx__conv__11 *op_ctx = NULL;
-    op_ctx = malloc(sizeof(context_operator__ai_onnx__conv__11));
+    op_ctx = (context_operator__ai_onnx__conv__11*)malloc(sizeof(context_operator__ai_onnx__conv__11));
     TRACE_FATAL(0 , !op_ctx, "could not allocate executer_context");
 
     op_ctx->auto_pad = a_auto_pad?strndup((char*)a_auto_pad->s.data, a_auto_pad->s.len):default_auto_pad;
 
     op_ctx->n_dilations = a_dilations?a_dilations->n_ints:default_n_dilations;
-    op_ctx->dilations = malloc(op_ctx->n_dilations * sizeof(int64_t));
+    op_ctx->dilations = (int64_t*)malloc(op_ctx->n_dilations * sizeof(int64_t));
     TRACE_FATAL(0, !op_ctx->dilations, "malloc failed");
     for(int i = 0; i < op_ctx->n_dilations; i++) {
         op_ctx->dilations[i] = a_dilations?a_dilations->ints[i]:default_dilations;
     }
 
     op_ctx->n_strides = a_strides?a_strides->n_ints:default_n_strides;
-    op_ctx->strides = malloc(op_ctx->n_strides * sizeof(int64_t));
+    op_ctx->strides = (int64_t*)malloc(op_ctx->n_strides * sizeof(int64_t));
     TRACE_FATAL(0, !op_ctx->strides, "malloc failed");
     for(int i = 0; i < op_ctx->n_strides; i++) {
         op_ctx->strides[i] = a_strides?a_strides->ints[i]:default_strides;
@@ -100,9 +102,9 @@ prepare_operator__ai_onnx__conv__11(
     op_ctx->kernel_shape = a_kernel_shape?a_kernel_shape->ints:default_kernel_shape;
 
     op_ctx->n_pads = a_pads?a_pads->n_ints/2:default_n_pads;
-    op_ctx->pads_begin = malloc(op_ctx->n_pads * sizeof(int64_t));
+    op_ctx->pads_begin = (int64_t*)malloc(op_ctx->n_pads * sizeof(int64_t));
     TRACE_FATAL(0, !op_ctx->pads_begin, "malloc failed");
-    op_ctx->pads_end   = malloc(op_ctx->n_pads * sizeof(int64_t));
+    op_ctx->pads_end   = (int64_t*)malloc(op_ctx->n_pads * sizeof(int64_t));
     TRACE_FATAL(0, !op_ctx->pads_end, "malloc failed");
     for(int i = 0; i < op_ctx->n_pads; i++) {
         if (a_pads && i < a_pads->n_ints/2) {
@@ -157,7 +159,7 @@ prepare_operator__ai_onnx__conv__11(
     /* INITIALIZE OUTPUTS DATA_TYPE AND SHAPE HERE */
 
     o_Y->n_dims = i_W->n_dims;
-    o_Y->dims   = malloc(o_Y->n_dims * sizeof(int64_t));
+    o_Y->dims   = (int64_t*)malloc(o_Y->n_dims * sizeof(int64_t));
 
     // strange dimension calculation regarding
     // https://github.com/Microsoft/onnxruntime/issues/495

@@ -98,7 +98,7 @@ prepare_operator__ai_onnx__convtranspose__11(
     // int64_t* default_strides = ;
 
     context_operator__ai_onnx__convtranspose__11 *op_ctx = NULL;
-    op_ctx = malloc(sizeof(context_operator__ai_onnx__convtranspose__11));
+    op_ctx = (context_operator__ai_onnx__convtranspose__11*)malloc(sizeof(context_operator__ai_onnx__convtranspose__11));
     TRACE_FATAL(0 , !op_ctx, "could not allocate executer_context");
 
     // op_ctx->auto_pad = a_auto_pad?strndup((char*)a_auto_pad->s.data, a_auto_pad->s.len):default_auto_pad;
@@ -151,7 +151,7 @@ prepare_operator__ai_onnx__convtranspose__11(
     int outputSizeY = calcOutputSize(inputSizeY, kernelSizeY, strideY, dilationsY, padStartY, padEndY);
 
     o_Y->n_dims       = i_X->n_dims;
-    o_Y->dims         = malloc(o_Y->n_dims * sizeof(int64_t));
+    o_Y->dims         = (int64_t*)malloc(o_Y->n_dims * sizeof(int64_t));
     TRACE_FATAL(0, !op_ctx->dilations, "malloc failed");
     o_Y->has_raw_data = 0;
     o_Y->data_type    = ONNX__TENSOR_PROTO__DATA_TYPE__FLOAT;

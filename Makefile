@@ -59,14 +59,20 @@ VARIABLE+=ONNX_EXCLUDE
 HELP_ONNX_EXCLUDE=which schemas to exclude
 ONNX_EXCLUDE=
 
-CC=gcc
-CFLAGS+=-std=c99
+CC=g++
+# CFLAGS+=-std=c99
 CFLAGS+=-Wall
-CFLAGS+=-g3 -gdwarf -O2
+CFLAGS+=-g3 -gdwarf -O2 
 # CFLAGS+=-Werror # CI jobs run with flag enabled
 ifdef TRACE_LEVEL
 CPPFLAGS+=-D "TRACE_LEVEL=$(TRACE_LEVEL)"
 endif
+
+VTA_DIR = /home/xilinx/vta_lib
+VTA_AR_DIR = -L$(VTA_DIR)/build
+VTA_H_DIR = -I$(VTA_DIR)/include/zcu102 -I$(VTA_DIR)/3rdparty/dmlc-core/include
+CFLAGS+= -DVTA $(VTA_H_DIR) -DVTA_COHERENT_ACCESSES=true 
+LDLIBS+= -fopenmp -lvta_runtime -lcma -lpthread $(VTA_AR_DIR)
 
 LDFLAGS+=-g
 LDLIBS+=-lcunit
@@ -101,7 +107,7 @@ TARGET+=sharedlib
 sharedlib: CFLAGS += -fpic
 sharedlib: $(BUILDDIR)/sharedlib
 $(BUILDDIR)/sharedlib: $(OBJS)
-	$(CC) -shared -o $(BUILDDIR)/libconnxr.so -fpic $(CPPFLAGS) $(CFLAGS) $(LDFLAGS) $(LDLIBS) `find build/ -iname '*.o' -type f`
+	$(CC) -shared -o $(BUILDDIR)/libconnxr.so -fPIC  $(CPPFLAGS) $(CFLAGS) $(LDFLAGS) $(LDLIBS) `find build/ -iname '*.o' -type f`
 
 .phony: clean_build
 CLEAN+=clean_build

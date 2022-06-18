@@ -153,7 +153,7 @@ Onnx__ModelProto* openOnnxFile(char *fname){
 
   fseek(fl, 0, SEEK_END);
   long len = ftell(fl);
-  uint8_t *ret = malloc(len);
+  uint8_t *ret = (uint8_t*)malloc(len);
   fseek(fl, 0, SEEK_SET);
   for(long read = 0; read < len; read += fread(ret, 1, len-read, fl));
   fclose(fl);
@@ -181,7 +181,7 @@ Onnx__TensorProto *openTensorProtoFile(char *fname){
 
   fseek(fl, 0, SEEK_END);
   long len = ftell(fl);
-  uint8_t *ret = malloc(len);
+  uint8_t *ret = (uint8_t*)malloc(len);
   fseek(fl, 0, SEEK_SET);
   for(long read = 0; read < len; read += fread(ret, 1, len-read, fl));
   fclose(fl);
@@ -226,7 +226,7 @@ int convertRawDataOfTensorProto(Onnx__TensorProto *tensor)
     {
       tensor->n_float_data = tensor->raw_data.len/4;
       // todo use sizeof
-      tensor->float_data = malloc(tensor->n_float_data * sizeof(float));
+      tensor->float_data = (float*)malloc(tensor->n_float_data * sizeof(float));
       for (int i = 0; i < tensor->raw_data.len; i+=4)
       {
         // Once float is 4 bytes.
@@ -237,7 +237,7 @@ int convertRawDataOfTensorProto(Onnx__TensorProto *tensor)
     /* TODO I think uint8 and 16/32 can be all merged since the type is the same*/
     case ONNX__TENSOR_PROTO__DATA_TYPE__UINT8:
       tensor->n_int32_data = tensor->raw_data.len/sizeof(uint8_t);
-      tensor->int32_data = malloc(tensor->n_int32_data * sizeof(int32_t));
+      tensor->int32_data = (int32_t*)malloc(tensor->n_int32_data * sizeof(int32_t));
       for (int i = 0; i < tensor->raw_data.len; i+=sizeof(uint8_t)){
         tensor->int32_data[i/sizeof(uint8_t)] = *(uint8_t *)&tensor->raw_data.data[i];
       }
@@ -253,7 +253,7 @@ int convertRawDataOfTensorProto(Onnx__TensorProto *tensor)
     case ONNX__TENSOR_PROTO__DATA_TYPE__INT64:
     {
       tensor->n_int64_data = tensor->raw_data.len/sizeof(int64_t);
-      tensor->int64_data = malloc(tensor->n_int64_data * sizeof(int64_t));
+      tensor->int64_data = (int64_t*)malloc(tensor->n_int64_data * sizeof(int64_t));
       for (int i = 0; i < tensor->raw_data.len; i+=sizeof(int64_t))
       {
         tensor->int64_data[i/sizeof(int64_t)] = *(int64_t *)&tensor->raw_data.data[i];
@@ -307,13 +307,13 @@ void mallocTensorProto(Onnx__TensorProto *tp,
   tp->n_external_data = 0;
   tp->has_data_location = 0;
   tp->n_dims = n_dims;
-  tp->dims = malloc(n_dims * sizeof(int64_t));
-  tp->name = malloc(MAX_CHAR_SIZE * sizeof(char));
+  tp->dims = (int64_t*)malloc(n_dims * sizeof(int64_t));
+  tp->name = (char*)malloc(MAX_CHAR_SIZE * sizeof(char));
 
   if (tp->data_type == ONNX__TENSOR_PROTO__DATA_TYPE__FLOAT ||
       tp->data_type == ONNX__TENSOR_PROTO__DATA_TYPE__COMPLEX64){
     tp->n_float_data = n_data;
-    tp->float_data = malloc(n_data * sizeof(float));
+    tp->float_data = (float*)malloc(n_data * sizeof(float));
 
   }else if (tp->data_type == ONNX__TENSOR_PROTO__DATA_TYPE__INT32  ||
             tp->data_type == ONNX__TENSOR_PROTO__DATA_TYPE__INT16  ||
@@ -323,11 +323,11 @@ void mallocTensorProto(Onnx__TensorProto *tp,
             tp->data_type == ONNX__TENSOR_PROTO__DATA_TYPE__BOOL   ||
             tp->data_type == ONNX__TENSOR_PROTO__DATA_TYPE__FLOAT16){
     tp->n_int32_data = n_data;
-    tp->int32_data = malloc(n_data * sizeof(int32_t));
+    tp->int32_data = (int32_t*)malloc(n_data * sizeof(int32_t));
 
   }else if (tp->data_type == ONNX__TENSOR_PROTO__DATA_TYPE__INT64){
     tp->n_int64_data = n_data;
-    tp->int64_data = malloc(n_data * sizeof(int64_t));
+    tp->int64_data = (int64_t*)malloc(n_data * sizeof(int64_t));
 
   }else if(tp->data_type == ONNX__TENSOR_PROTO__DATA_TYPE__STRING){
     /* TODO
@@ -337,12 +337,12 @@ void mallocTensorProto(Onnx__TensorProto *tp,
   }else if(tp->data_type == ONNX__TENSOR_PROTO__DATA_TYPE__DOUBLE ||
           tp->data_type == ONNX__TENSOR_PROTO__DATA_TYPE__COMPLEX128){
     tp->n_double_data = n_data;
-    tp->double_data = malloc(n_data * sizeof(double));
+    tp->double_data = (double*)malloc(n_data * sizeof(double));
 
   }else if(tp->data_type == ONNX__TENSOR_PROTO__DATA_TYPE__UINT64 ||
           tp->data_type == ONNX__TENSOR_PROTO__DATA_TYPE__UINT32){
     tp->n_uint64_data = n_data;
-    tp->uint64_data = malloc(n_data * sizeof(uint64_t));
+    tp->uint64_data = (uint64_t*)malloc(n_data * sizeof(uint64_t));
   }
 
   TRACE_EXIT(1);
@@ -447,31 +447,31 @@ size_t exportTensorProtoFile(const Onnx__TensorProto *tensor, char *fname) {
 }
 
 
-size_t
-strnlen(const char *str, size_t length) {
-  size_t count;
-  for(count = 0; count < length && str[count]; count++);
-  return count;
-}
+// size_t
+// strnlen(const char *str, size_t length) {
+//   size_t count;
+//   for(count = 0; count < length && str[count]; count++);
+//   return count;
+// }
 
-char*
-strdup( const char *src ) {
-  size_t len = strlen(src);
-  char *buffer = malloc(sizeof(char)*(len+1));
-  if(!buffer) return NULL;
-  strcpy(buffer,src);
-  return buffer;
-}
+// char*
+// strdup( const char *src ) {
+//   size_t len = strlen(src);
+//   char *buffer = malloc(sizeof(char)*(len+1));
+//   if(!buffer) return NULL;
+//   strcpy(buffer,src);
+//   return buffer;
+// }
 
-char*
-strndup( const char *src, size_t num) {
-  size_t len = strnlen(src, num);
-  char *buffer = malloc(sizeof(char)*(len+1));
-  if(!buffer) return NULL;
-  strncpy(buffer,src, len);
-  buffer[len] = '\0';
-  return buffer;
-}
+// char*
+// strndup( const char *src, size_t num) {
+//   size_t len = strnlen(src, num);
+//   char *buffer = malloc(sizeof(char)*(len+1));
+//   if(!buffer) return NULL;
+//   strncpy(buffer,src, len);
+//   buffer[len] = '\0';
+//   return buffer;
+// }
 
 void*
 memdup( const void *src, size_t size) {
@@ -492,91 +492,91 @@ mallocTensorData(Onnx__TensorProto *dst) {
   switch (dst->data_type) {
     case ONNX__TENSOR_PROTO__DATA_TYPE__FLOAT:
       n_data         = &dst->n_float_data;
-      data           = (void*) &dst->float_data;
+      data           = (void**) &dst->float_data;
       size_element   = sizeof(float);
       size_container = sizeof(float);
       break;
     case ONNX__TENSOR_PROTO__DATA_TYPE__UINT8:
       n_data         = &dst->n_int32_data;
-      data           = (void*) &dst->int32_data;
+      data           = (void**) &dst->int32_data;
       size_element   = sizeof(uint8_t);
       size_container = sizeof(int32_t);
       break;
     case ONNX__TENSOR_PROTO__DATA_TYPE__INT8:
       n_data         = &dst->n_int32_data;
-      data           = (void*) &dst->int32_data;
+      data           = (void**) &dst->int32_data;
       size_element   = sizeof(int8_t);
       size_container = sizeof(int32_t);
       break;
     case ONNX__TENSOR_PROTO__DATA_TYPE__UINT16:
       n_data         = &dst->n_int32_data;
-      data           = (void*) &dst->int32_data;
+      data           = (void**) &dst->int32_data;
       size_element   = sizeof(uint16_t);
       size_container = sizeof(int32_t);
       break;
     case ONNX__TENSOR_PROTO__DATA_TYPE__INT16:
       n_data         = &dst->n_int32_data;
-      data           = (void*) &dst->int32_data;
+      data           = (void**) &dst->int32_data;
       size_element   = sizeof(int16_t);
       size_container = sizeof(int32_t);
       break;
     case ONNX__TENSOR_PROTO__DATA_TYPE__INT32:
       n_data         = &dst->n_int32_data;
-      data           = (void*) &dst->int32_data;
+      data           = (void**) &dst->int32_data;
       size_element   = sizeof(int32_t);
       size_container = sizeof(int32_t);
       break;
     case ONNX__TENSOR_PROTO__DATA_TYPE__INT64:
       n_data         = &dst->n_int64_data;
-      data           = (void*) &dst->int64_data;
+      data           = (void**) &dst->int64_data;
       size_element   = sizeof(int64_t);
       size_container = sizeof(int64_t);
       break;
     case ONNX__TENSOR_PROTO__DATA_TYPE__STRING:
       n_data         = &dst->n_string_data;
-      data           = (void*) &dst->string_data;
+      data           = (void**) &dst->string_data;
       size_element   = sizeof(ProtobufCBinaryData);
       size_container = sizeof(ProtobufCBinaryData);
       break;
     case ONNX__TENSOR_PROTO__DATA_TYPE__BOOL:
       n_data         = &dst->n_int32_data;
-      data           = (void*) &dst->int32_data;
+      data           = (void**) &dst->int32_data;
       size_element   = sizeof(bool);
       size_container = sizeof(int32_t);
       break;
     case ONNX__TENSOR_PROTO__DATA_TYPE__FLOAT16:
       n_data         = &dst->n_int32_data;
-      data           = (void*) &dst->int32_data;
+      data           = (void**) &dst->int32_data;
       size_element   = sizeof(float)/2;
       size_container = sizeof(int32_t);
       break;
     case ONNX__TENSOR_PROTO__DATA_TYPE__DOUBLE:
       n_data         = &dst->n_double_data;
-      data           = (void*) &dst->double_data;
+      data           = (void**) &dst->double_data;
       size_element   = sizeof(double);
       size_container = sizeof(double);
       break;
     case ONNX__TENSOR_PROTO__DATA_TYPE__UINT32:
       n_data         = &dst->n_uint64_data;
-      data           = (void*) &dst->uint64_data;
+      data           = (void**) &dst->uint64_data;
       size_element   = sizeof(uint32_t);
       size_container = sizeof(uint64_t);
       break;
     case ONNX__TENSOR_PROTO__DATA_TYPE__UINT64:
       n_data         = &dst->n_uint64_data;
-      data           = (void*) &dst->uint64_data;
+      data           = (void**) &dst->uint64_data;
       size_element   = sizeof(uint64_t);
       size_container = sizeof(uint64_t);
       break;
     case ONNX__TENSOR_PROTO__DATA_TYPE__COMPLEX64:
       n_data         = &dst->n_float_data;
-      data           = (void*) &dst->float_data;
+      data           = (void**) &dst->float_data;
       size_element   = sizeof(float)*2;
       size_container = sizeof(float);
       break;
     case ONNX__TENSOR_PROTO__DATA_TYPE__COMPLEX128:
       n_data         = &dst->n_double_data;
-      data           = (void*) &dst->double_data;
+      data           = (void**) &dst->double_data;
       size_element   = sizeof(double)*2;
       size_container = sizeof(double);
       break;
@@ -602,49 +602,49 @@ freeTensorData(Onnx__TensorProto *dst) {
   void   **data;
   switch (dst->data_type) {
     case ONNX__TENSOR_PROTO__DATA_TYPE__FLOAT:
-      data           = (void*) &dst->float_data;
+      data           = (void**) &dst->float_data;
       break;
     case ONNX__TENSOR_PROTO__DATA_TYPE__UINT8:
-      data           = (void*) &dst->int32_data;
+      data           = (void**) &dst->int32_data;
       break;
     case ONNX__TENSOR_PROTO__DATA_TYPE__INT8:
-      data           = (void*) &dst->int32_data;
+      data           = (void**) &dst->int32_data;
       break;
     case ONNX__TENSOR_PROTO__DATA_TYPE__UINT16:
-      data           = (void*) &dst->int32_data;
+      data           = (void**) &dst->int32_data;
       break;
     case ONNX__TENSOR_PROTO__DATA_TYPE__INT16:
-      data           = (void*) &dst->int32_data;
+      data           = (void**) &dst->int32_data;
       break;
     case ONNX__TENSOR_PROTO__DATA_TYPE__INT32:
-      data           = (void*) &dst->int32_data;
+      data           = (void**) &dst->int32_data;
       break;
     case ONNX__TENSOR_PROTO__DATA_TYPE__INT64:
-      data           = (void*) &dst->int64_data;
+      data           = (void**) &dst->int64_data;
       break;
     case ONNX__TENSOR_PROTO__DATA_TYPE__STRING:
-      data           = (void*) &dst->string_data;
+      data           = (void**) &dst->string_data;
       break;
     case ONNX__TENSOR_PROTO__DATA_TYPE__BOOL:
-      data           = (void*) &dst->int32_data;
+      data           = (void**) &dst->int32_data;
       break;
     case ONNX__TENSOR_PROTO__DATA_TYPE__FLOAT16:
-      data           = (void*) &dst->int32_data;
+      data           = (void**) &dst->int32_data;
       break;
     case ONNX__TENSOR_PROTO__DATA_TYPE__DOUBLE:
-      data           = (void*) &dst->double_data;
+      data           = (void**) &dst->double_data;
       break;
     case ONNX__TENSOR_PROTO__DATA_TYPE__UINT32:
-      data           = (void*) &dst->uint64_data;
+      data           = (void**) &dst->uint64_data;
       break;
     case ONNX__TENSOR_PROTO__DATA_TYPE__UINT64:
-      data           = (void*) &dst->uint64_data;
+      data           = (void**) &dst->uint64_data;
       break;
     case ONNX__TENSOR_PROTO__DATA_TYPE__COMPLEX64:
-      data           = (void*) &dst->float_data;
+      data           = (void**) &dst->float_data;
       break;
     case ONNX__TENSOR_PROTO__DATA_TYPE__COMPLEX128:
-      data           = (void*) &dst->double_data;
+      data           = (void**) &dst->double_data;
       break;
     case ONNX__TENSOR_PROTO__DATA_TYPE__BFLOAT16:
       //is not documented

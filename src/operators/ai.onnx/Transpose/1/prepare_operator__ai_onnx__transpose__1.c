@@ -33,7 +33,7 @@ prepare_operator__ai_onnx__transpose__1(
     }
 
     context_operator__ai_onnx__transpose__1 *op_ctx = NULL;
-    op_ctx = malloc(sizeof(context_operator__ai_onnx__transpose__1));
+    op_ctx = (context_operator__ai_onnx__transpose__1*)malloc(sizeof(context_operator__ai_onnx__transpose__1));
     TRACE_FATAL(0 , !op_ctx, "could not allocate executer_context");
 
     op_ctx->n_perm = a_perm?a_perm->n_ints:default_n_perm;
@@ -45,7 +45,7 @@ prepare_operator__ai_onnx__transpose__1(
     /* INITIALIZE OUTPUTS DATA_TYPE AND SHAPE HERE */
 
     o_transposed->n_dims       = op_ctx->n_perm;
-    o_transposed->dims         = malloc(o_transposed->n_dims * sizeof(int64_t));
+    o_transposed->dims         = (int64_t*)malloc(o_transposed->n_dims * sizeof(int64_t));
     o_transposed->has_raw_data = 0;
     o_transposed->data_type    = i_data->data_type;
 

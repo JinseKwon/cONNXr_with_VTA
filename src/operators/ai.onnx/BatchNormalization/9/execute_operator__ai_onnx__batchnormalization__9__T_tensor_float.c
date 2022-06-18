@@ -3,6 +3,7 @@
 #include "tracing.h"
 #include "utils.h"
 #include <math.h>
+#include <omp.h>
 
 operator_status
 execute_operator__ai_onnx__batchnormalization__9__T_tensor_float(
@@ -27,7 +28,7 @@ execute_operator__ai_onnx__batchnormalization__9__T_tensor_float(
     TRACE_TENSOR(2, true, i_mean);
     TRACE_TENSOR(2, true, i_var);
 
-    context_operator__ai_onnx__batchnormalization__9 *op_ctx = ctx->executer_context;
+    context_operator__ai_onnx__batchnormalization__9 *op_ctx = (context_operator__ai_onnx__batchnormalization__9*)ctx->executer_context;
 
     float epsilon = op_ctx->epsilon;
     // float momentum = op_ctx->momentum;
@@ -48,7 +49,7 @@ execute_operator__ai_onnx__batchnormalization__9__T_tensor_float(
     // TRACE_TENSOR(2, saved_var, o_saved_var);
 
     /* DO CALCULATION HERE */
-
+    #pragma omp parallel for
     for (int i = 0; i < o_Y->n_float_data; i++) {
         TRACE_BOUND(3, true, i, 0, (int)o_Y->n_float_data, "%d");
         int index = (i/(i_X->dims[2] * i_X->dims[3])) % i_X->dims[1];

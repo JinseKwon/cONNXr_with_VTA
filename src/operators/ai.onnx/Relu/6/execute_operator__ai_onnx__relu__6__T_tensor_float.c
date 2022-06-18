@@ -2,7 +2,7 @@
 #include "operator__ai_onnx__relu__6.h"
 #include "tracing.h"
 #include "utils.h"
-
+#include <omp.h>
 operator_status
 execute_operator__ai_onnx__relu__6__T_tensor_float(
     node_context *ctx
@@ -25,7 +25,7 @@ execute_operator__ai_onnx__relu__6__T_tensor_float(
     TRACE_TENSOR(2, true, o_Y);
 
     /* DO CALCULATION HERE */
-
+#pragma omp parallel for
     for (int i = 0; i < o_Y->n_float_data; i++) {
         o_Y->float_data[i] = i_X->float_data[i] < 0 ? 0 : i_X->float_data[i];
     }

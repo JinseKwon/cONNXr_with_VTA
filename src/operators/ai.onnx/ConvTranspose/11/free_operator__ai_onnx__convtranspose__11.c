@@ -46,7 +46,7 @@ free_operator__ai_onnx__convtranspose__11(
 
     /* FREE CONTEXT HERE IF NEEDED */
 
-    context_operator__ai_onnx__convtranspose__11 *op_ctx = ctx->executer_context;
+    context_operator__ai_onnx__convtranspose__11 *op_ctx = (context_operator__ai_onnx__convtranspose__11*)ctx->executer_context;
 
     // TRACE_VAR(2, true, op_ctx->auto_pad, "\"%s\"");
     TRACE_ARRAY(2, true, op_ctx->dilations, , op_ctx->n_dilations, "%" PRId64);

@@ -35,7 +35,7 @@ execute_operator__ai_onnx__convtranspose__11__T_tensor_float(
     TRACE_TENSOR(2, true, i_W);
     TRACE_TENSOR(2, B, i_B);
 
-    context_operator__ai_onnx__convtranspose__11 *op_ctx = ctx->executer_context;
+    context_operator__ai_onnx__convtranspose__11 *op_ctx = (context_operator__ai_onnx__convtranspose__11*)ctx->executer_context;
 
     // size is not needed, because this operator works for one fixed size only
 

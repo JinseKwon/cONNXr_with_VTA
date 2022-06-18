@@ -53,7 +53,7 @@ prepare_operator__ai_onnx__maxpool__12(
     int64_t default_strides = 1;
 
     context_operator__ai_onnx__maxpool__12 *op_ctx = NULL;
-    op_ctx = malloc(sizeof(context_operator__ai_onnx__maxpool__12));
+    op_ctx = (context_operator__ai_onnx__maxpool__12*)malloc(sizeof(context_operator__ai_onnx__maxpool__12));
     TRACE_FATAL(0 , !op_ctx, "could not allocate executer_context");
 
     op_ctx->auto_pad = a_auto_pad?strndup((char*)a_auto_pad->s.data, a_auto_pad->s.len):default_auto_pad;
@@ -67,16 +67,16 @@ prepare_operator__ai_onnx__maxpool__12(
     op_ctx->kernel_shape = a_kernel_shape->ints;
 
     op_ctx->n_strides = a_strides?a_strides->n_ints:default_n_strides;
-    op_ctx->strides = malloc(op_ctx->n_strides * sizeof(int64_t));
+    op_ctx->strides = (int64_t*)malloc(op_ctx->n_strides * sizeof(int64_t));
     TRACE_FATAL(0, !op_ctx->strides, "malloc failed");
     for(int i = 0; i < op_ctx->n_strides; i++) {
         op_ctx->strides[i] = a_strides?a_strides->ints[i]:default_strides;
     }
 
     op_ctx->n_pads = a_pads?a_pads->n_ints/2:default_n_pads;
-    op_ctx->pads_begin = malloc(op_ctx->n_pads * sizeof(int64_t));
+    op_ctx->pads_begin = (int64_t*)malloc(op_ctx->n_pads * sizeof(int64_t));
     TRACE_FATAL(0, !op_ctx->pads_begin, "malloc failed");
-    op_ctx->pads_end   = malloc(op_ctx->n_pads * sizeof(int64_t));
+    op_ctx->pads_end   = (int64_t*)malloc(op_ctx->n_pads * sizeof(int64_t));
     TRACE_FATAL(0, !op_ctx->pads_end, "malloc failed");
     for(int i = 0; i < op_ctx->n_pads; i++) {
         TRACE_BOUND(3, true, i, 0, (int) op_ctx->n_pads, "%d");

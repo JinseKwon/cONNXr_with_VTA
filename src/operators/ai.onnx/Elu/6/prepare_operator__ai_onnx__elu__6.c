@@ -29,7 +29,7 @@ prepare_operator__ai_onnx__elu__6(
     float default_alpha = 1.0;
 
     context_operator__ai_onnx__elu__6 *op_ctx = NULL;
-    op_ctx = malloc(sizeof(context_operator__ai_onnx__elu__6));
+    op_ctx = (context_operator__ai_onnx__elu__6*)malloc(sizeof(context_operator__ai_onnx__elu__6));
     TRACE_FATAL(0 , !op_ctx, "could not allocate executer_context");
 
     op_ctx->alpha = a_alpha?a_alpha->f:default_alpha;

@@ -3,7 +3,50 @@
 #include "tracing.h"
 #include "utils.h"
 #include "index.h"
+#include <omp.h>
+#include <time.h>
+#include <math.h>
 
+#include <fcntl.h>
+#include <unistd.h>
+#include <sys/ioctl.h>
+
+#include "vta/runtime.h"
+#include "vta/data_buf.h"
+
+#define RESET_IOCTL _IOWR('X', 101, unsigned long)
+#define EVTA_ID 0
+
+#define INP_IDX 16
+#define WEIGHT_IDX 16
+#define OUT_IDX 16
+
+VTACommandHandle vtaCmdH{nullptr};
+
+void *uop_init[2];
+void *uop_shr[2];
+void *uop_max[2];
+void *uop_min[2];
+
+void xlnk_reset() {
+  int xlnkfd = open("/dev/xlnk", O_RDWR | O_CLOEXEC);
+  if (xlnkfd < 0) {
+    printf("Reset failed - could not open device: %d\n", xlnkfd);
+    return;
+  }
+  if (ioctl(xlnkfd, RESET_IOCTL, 0) < 0) {
+    printf("Reset failed - IOCTL failed: %d\n", errno);
+  }
+  close(xlnkfd);
+}
+
+void vta_gemm(int M, int K, int N,
+        int8_t *A, float A_scale,
+        int8_t *B, float B_scale,
+        float *C,
+        int shr);
+
+int counter = 0;
 operator_status
 execute_operator__ai_onnx__conv__11__T_tensor_float(
     node_context *ctx
@@ -23,7 +66,7 @@ execute_operator__ai_onnx__conv__11__T_tensor_float(
     TRACE_TENSOR(2, true, i_W);
     TRACE_TENSOR(2, i_B, i_B);
 
-    context_operator__ai_onnx__conv__11 *op_ctx = ctx->executer_context;
+    context_operator__ai_onnx__conv__11 *op_ctx = (context_operator__ai_onnx__conv__11*)ctx->executer_context;
 
     __attribute__((unused))
     char* auto_pad = op_ctx->auto_pad;
@@ -62,169 +105,703 @@ execute_operator__ai_onnx__conv__11__T_tensor_float(
 
     /* DO CALCULATION HERE */
 
+  //im2col
+  
+    int im_size = i_X->dims[3];
+    int ch  = i_X->dims[1];
+    int ker = kernel_shape[0];
+    int pad = pads_begin[0];
+    int str = strides[0];
+    int hw_size = (im_size + 2*pad - ker) / str + 1;
 
-  if (i_X->n_dims == 4 || i_X->n_dims == 2) {
-    //legacy code, almost untouched, fast for 2 and 4 dimension
-    //TODO replace, refactor
-    int64_t h_kernel = kernel_shape[0];
-    int64_t w_kernel = kernel_shape[1];
-    __attribute__((unused))
-    int64_t d_kernel = kernel_shape[2];
-    int64_t h_stride = strides[0];
-    int64_t w_stride = strides[1];
-    int64_t h_dilation = dilations[0];
-    int64_t w_dilation = dilations[1];
-    int64_t h_pad    = pads_begin[0];
-    int64_t w_pad    = pads_begin[1];
-    int b, i, j, k, m, n, d;
-    for(b = 0; b < o_Y->dims[0]; ++b){
-      for(k = 0; k < o_Y->dims[1]; ++k){
-        int g = (k/(o_Y->dims[1]/group));
-        TRACE_BOUND_FATAL(3, true, g, 0, (int)group, "%d");
-        for(i = 0; i < o_Y->dims[2]; ++i){
-          for(j = 0; j < o_Y->dims[3]; ++j){
-            // TODO replace all this calculations by macros?
-            uint64_t out_index = j + o_Y->dims[3]*(i + o_Y->dims[2]*(k + o_Y->dims[1]*b));
-            float value = 0;
+    int M = hw_size *hw_size; 
+    int K = ch*ker*ker;
+    int N = i_W->dims[0];
 
-            if (i_X->n_dims == 4){
-              const int offset_in = g*(i_X->dims[3]*i_X->dims[2]*(i_X->dims[1]/group));
-              TRACE_VAR(4, true, offset_in, "%d");
-              for(d = 0; d < i_W->dims[1]; ++d){
-                for(n = 0; n < h_kernel; ++n){   // TODO use i_W->dims[2] instead?
-                  for(m = 0; m < w_kernel; ++m){ // TODO use i_W->dims[3] instead?
-                    int cur_h = i*h_stride + n * h_dilation - h_pad;
-                    int cur_w = j*w_stride + m * w_dilation - w_pad;
+    int input_size = M*K;
+    int weight_size = K*N;
+    int output_size = M*N;
+  if(counter == 0){
+    xlnk_reset();
+    vtaCmdH = VTATLSCommandHandle(EVTA_ID);
+  }
 
-                    /* This is hardcoded to make it work with mnist model, where
-                    the input is 1x1x28x28 */
-                    int index = offset_in + cur_w + i_X->dims[3]*(cur_h + i_X->dims[2]*(d + 0*i_X->dims[1]));
-                    //TRACE_LEVEL0("%d, %d, %d index=%d\n", d, cur_h, cur_w, index);
+  clock_t start, end;
+  double cpu_time_used;
+  start = clock();  
+  
 
-                    int valid = (cur_h >= 0 && cur_h < i_X->dims[2] &&
-                                 cur_w >= 0 && cur_w < i_X->dims[3]);
-                    TRACE_BOUND_FATAL(5, valid, index, 0, (int)i_X->n_float_data, "%d");
-                    float val = (valid != 0) ? i_X->float_data[index] : 0;
-                    int index_kernel = k*i_W->dims[3]*i_W->dims[2]*i_W->dims[1] + d*i_W->dims[3]*i_W->dims[2] + n*h_kernel + m; // change h_kernel by i_W->dims[x]
-                    value += val * i_W->float_data[index_kernel];
-                    //TRACE_LEVEL0("%fx%f+\n", val, i_W->float_data[index_kernel]);
-                  }
+    if(counter < 20){
+      counter++;
+      // printf("%dx%dx%d -> (%dx%d)x%dx%dx%d ",ch,im_size,im_size,hw_size,hw_size,ch,ker,ker);
+      // printf("||%dx%d * %dx%d \n",M,K,K,N);
+      float* i2c_in = (float*)malloc(hw_size * hw_size * ch * ker * ker * sizeof(float));
+      float* im = &i_X->float_data[0];
+
+      #pragma omp parallel for
+      for(int c = 0; c < ch; c++){
+        for(int h = 0; h < hw_size; h++){
+          for(int w = 0; w < hw_size; w++){
+            for(int r = 0; r < ker; r++){
+              for(int s = 0; s < ker; s++){
+                int im_row = h*str + (r - ker/2);
+                int im_col = w*str + (s - ker/2);
+                int i2c_idx = h *hw_size*ch*ker*ker + 
+                              w *ch*ker*ker + 
+                              c *ker*ker +
+                              r *ker +
+                              s;
+                if(im_row <0 || im_col <0 || im_row >=im_size || im_col >=im_size){
+                  i2c_in[i2c_idx] = 0.0f;
+                }else{
+                  int im_idx  = c*im_size*im_size + im_row*im_size + im_col;
+                  i2c_in[i2c_idx] = im[im_idx];
                 }
               }
-            }else if (i_X->n_dims == 2){
-              const int offset_in = g*(i_X->dims[1]/group);
-              TRACE_VAR(4, true, offset_in, "%d");
-              for(n = 0; n < h_kernel; ++n){
-                for(m = 0; m < w_kernel; ++m){
-                  int cur_h = i*h_stride + n * h_dilation - h_pad;
-                  int cur_w = j*w_stride + m * w_dilation - w_pad;
-                  //printf("%d, %d\n", cur_h, cur_w);
-                  int index = offset_in + cur_w + i_X->dims[1]*cur_h;
-                  //printf("index=%d\n", index);
-                  int valid = (cur_h >= 0 && cur_h < i_X->dims[0] &&
-                               cur_w >= 0 && cur_w < i_X->dims[1]);
-                  TRACE_BOUND_FATAL(5, valid, index, 0, (int)i_X->n_float_data, "%d");
-                  float val = (valid != 0) ? i_X->float_data[index] : 0;
-                  int index_kernel = k*i_W->dims[3]*i_W->dims[2]*i_W->dims[1] + n*h_kernel + m;
-                  value += val * i_W->float_data[index_kernel];
-                  //TRACE_LEVEL0("%fx%f+\n", val, input[1]->float_data[index_kernel]);
-                }
-              }
-            }else{
-              /* TODO */
-            }
-            TRACE_BOUND_FATAL(4, true, (size_t)out_index, (size_t)0, o_Y->n_float_data, "%zu");
-            o_Y->float_data[out_index] = value;
-            //printf("%lld\n", out_index);
-            //printf("[%lld]=%f\n", out_index, value);
-
-            /* TODO This is a huge crap to make it work with tinyYOLO
-            It adds the bias, but this if will waste a lot of time. Make
-            this nice!
-            */
-            if (i_B != NULL){
-              o_Y->float_data[out_index] += i_B->float_data[k];
             }
           }
         }
       }
-    }
-    TRACE_EXIT(1);
-    return 0;
-  }
+      float *we  = &i_W->float_data[0];
+      float *out = &o_Y->float_data[0];
+      if(counter < 20 && M%16 ==0 && K%16 == 0 && N %16 == 0){
+      
+        float rng = 127.f;
+        int shr = 8;
+        if(counter == 2) shr = 8;
+        else if(counter == 3) shr = 8;
+        else if(counter == 4) shr = 10;
+        else if(counter == 5) shr = 8;
+        else if(counter == 6) shr = 6;
+        else if(counter == 7) shr = 9;
+        else if(counter == 8) shr = 8;
+        else if(counter == 9) shr = 9;
+        else if(counter == 10) shr = 8;
+        else if(counter == 11) shr = 6;
+        else if(counter == 12) shr = 9;
+        else if(counter == 13) shr = 9;
+        else if(counter == 14) shr = 10;
+        else if(counter == 15) shr = 8;
+        else if(counter == 16) shr = 6;
+        else if(counter == 17) shr = 10;
+        else if(counter == 18) shr = 10;
+        else if(counter == 19) shr = 10;
 
-  TRACE_WARN(0, true, "running generic implementation...slow!");
 
-  // X : (B x C x D1 x D2 x ... )
-  __attribute__((unused))
-  int64_t B   = i_X->dims[0];
-  int64_t C   = i_X->dims[1];
+        int8_t *input  = (int8_t*)malloc(input_size);
+        int8_t *weight = (int8_t*)malloc(weight_size);
+        int8_t *output = (int8_t*)malloc(output_size);
 
-  // W : (M x C/group x K1 x K2 x ... )
-  int64_t M  = i_W->dims[0];
-  int64_t n_K = i_W->n_dims-2;
+        int8_t *input_temp  = (int8_t*)malloc(input_size);
+        int8_t *weight_temp = (int8_t*)malloc(weight_size);
+        int8_t *output_temp = (int8_t*)malloc(output_size);
 
-  index_ctx kernel_index;
-  int64_t   kernel_indices[i_W->n_dims];
-  int64_t   kernel_offsets[i_W->n_dims];
-  index_init(&kernel_index, i_W->n_dims, i_W->dims, kernel_indices, kernel_offsets);
-
-  index_ctx input_index;
-  int64_t   input_indices[i_X->n_dims];
-  int64_t   input_offsets[i_X->n_dims];
-  index_init(&input_index, i_X->n_dims, i_X->dims, input_indices, input_offsets);
-
-  index_ctx output_index;
-  int64_t   output_indices[o_Y->n_dims];
-  int64_t   output_offsets[o_Y->n_dims];
-  index_init(&output_index, o_Y->n_dims, o_Y->dims, output_indices, output_offsets);
-
-  do {
-    TRACE_INDEX(3, true, &output_index);
-    float value = i_B?i_B->float_data[index_get(&output_index, 1)]:0;
-    int64_t input_ch_offset = index_get(&output_index, 1)/(M/group);
-    TRACE_VAR(3, true, input_ch_offset, "%" PRId64);
-    index_set(&kernel_index, 0, index_get(&output_index, 1));
-    index_set(&input_index, 0, index_get(&output_index, 0));
-    for (int64_t ch = 0; ch < C/group; ch++) {
-      TRACE_BOUND(4, true, ch, (int64_t)0, C, "%" PRId64);
-      index_set(&kernel_index, 1, ch);
-      index_set(&input_index, 1, ch + input_ch_offset);
-      index_reset_sub(&kernel_index, 2);
-      do {
-        TRACE_INDEX(5, true, &kernel_index);
-        bool is_padded = false;
-        for (int i = 0; i < n_K; i++) {
-          int64_t input = 0;
-          input += index_get(&output_index, 2+i) * strides[i];
-          input += index_get(&kernel_index, 2+i) * dilations[i];
-          TRACE(6, true, "dim %d index %" PRId64 " valid in %" PRId64 ":%" PRId64 , 2+i, input, pads_begin[i], i_X->dims[2+i]);
-          if ( input < pads_begin[i] || input - pads_begin[i] >= i_X->dims[2+i]  ) {
-            is_padded = true;
-            TRACE(6, true, "dim %d index %" PRId64 " is padded, skipping", 2+i, input);
-            break;
+        float maxA = 0.f;
+        float maxA_pos = 0.f;
+        float maxA_neg = 0.f;
+        
+        for(int i = 0; i < N; i++){
+          for(int j = 0; j < K; j++){
+            // if(fabs(A[i*k+j]) > maxA) maxA = fabs(A[i*k+j]);
+            
+            if(we[i*K+j] > 0.0){
+              if(we[i*K+j] > maxA_pos)
+                maxA_pos = we[i*K+j];
+            }else{
+              if(we[i*K+j] < maxA_neg)
+                maxA_neg = we[i*K+j];
+            }
           }
-          index_set(&input_index, 2+i, input - pads_begin[i]);
         }
-        if (is_padded) {
-          continue;
+        float maxB = 0.f;
+        float maxB_pos = 0.f;
+        float maxB_neg = 0.f;
+
+        for(int i = 0; i < M; i++){
+          for(int j = 0; j < K; j++){
+            // if(fabs(B[i*n+j]) > maxB) maxB = fabs(B[i*n+j]);
+            if(i2c_in[i*K+j] > 0.0){
+              if(i2c_in[i*K+j] > maxB_pos)
+                maxB_pos = i2c_in[i*K+j];
+            }else{
+              if(i2c_in[i*K+j] < maxB_neg)
+                maxB_neg = i2c_in[i*K+j];
+            }
+          }
         }
-        TRACE_INDEX(5, true, &input_index);
-        float   data_input = i_X->float_data[input_index.offset];
-        float   data_kernel = i_W->float_data[kernel_index.offset];
-        TRACE_VAR(5, true, data_input, "%f");
-        TRACE_VAR(5, true, data_kernel, "%f");
-        value +=  data_input * data_kernel;
-        TRACE_VAR(5, true, value, "%f");
-      } while(index_inc_sub(&kernel_index, 1));
+
+        float div=1.f;
+        maxA = (fabs(maxA_neg) > fabs(maxA_pos)) ? 
+              (fabs(maxA_neg) - fabs(maxA_pos))/div +fabs(maxA_pos) : 
+              (fabs(maxA_pos) - fabs(maxA_neg))/div +fabs(maxA_neg) ;
+          
+        maxB = (fabs(maxB_neg) > fabs(maxB_pos)) ? 
+              (fabs(maxB_neg) - fabs(maxB_pos))/div +fabs(maxB_pos) : 
+              (fabs(maxB_pos) - fabs(maxB_neg))/div +fabs(maxB_neg) ;
+
+        float scale_we = maxA/rng;
+        float scale_in = maxB/rng;
+
+        printf("scale in : %f scale we : %f ",scale_in, scale_we);
+        // printf("%d layer A max = %f B max = %f shr = %d ",layer_num, maxA, maxB, shr);
+        // int shift = 6;
+        // shr = 9;
+        // printf("hello log? %f \n",log(2.0f)/log(2.0f));
+        for(int i = 0; i<M*K; i++){
+          int temp = i2c_in[i] / scale_in;
+          if(temp > 127) temp = 127;
+          if(temp < -128) temp = -128;
+          input_temp[i] = temp;
+        }
+        for(int i = 0; i<weight_size; i++){
+          // weight_temp[i] = (int8_t) (A[i] / maxA * rng);
+          // int temp = A[i] / maxA * rng;
+          int temp = we[i] / scale_we;
+          if(temp > 127) temp = 127;
+          if(temp < -128) temp = -128;
+          weight_temp[i] = temp;
+        }
+        vta_gemm(M,K,N,
+                input_temp,  scale_in, 
+                weight_temp, scale_we,
+                out, shr);
+      //   int max = 0;
+      //   // int out2[output_size] = {0};
+      //   int *out2 = (int*)malloc(output_size*sizeof(int));
+      //   for(int i = 0; i< N; i++){
+      //     for(int j = 0; j < M; j++){
+      //       int summ = 0;
+      //       for(int z = 0; z < K; z++){
+      //         summ += (int)input_temp[j*K + z]*(int)weight_temp[i*K + z];
+      //       }
+      //       if(abs(summ) > max){
+      //         max = abs(summ);
+      //       }
+      //       out2[i*M+j] = summ;
+      //     }
+      //   }
+      // //   printf("max : %d ",max);
+      // // float err_min = 10000000000000.f;
+      // // int err_min_shr;
+      // // for(int cc = 0; cc < 8; cc++){
+
+
+      //   for(int i = 0; i< N; i++){
+      //     for(int j = 0; j < M; j++){
+      //       int summ = out2[i*M + j];
+      //       summ = summ >> shr;
+      //       if(summ > 127)  summ = 127;
+      //       if(summ < -128) summ = -128;
+      //       output_temp[i*M+j] = (int8_t)summ;
+      //     }
+      //   }
+
+      // float *ref = (float*)malloc(output_size * sizeof(float));
+      // #pragma omp parallel for
+      //   for(int i = 0; i< N; i++){
+      //     for(int j = 0; j < M; j++){
+      //       float summ = 0.0f;
+      //       for(int z = 0; z < K; z++){
+      //         summ += i2c_in[j*K+z] * we[i*K+z];
+      //       }
+      //       ref[i*M+j] = summ;
+      //     }
+      //   }
+
+
+        // float err_acc = 0.0f;
+        // for(int i = 0; i < N; i++){
+        //   for(int j = 0; j < M; j++ ){
+        //     out[i*M+j] = (float)(output_temp[i*M+j] << shr) * scale_we * scale_in;
+        //     // err_acc += fabs(ref[i*M+j] - out[i*M+j]);
+        //     // out[i*M+j] = ref[i*M+j];
+        //   }
+        // }
+      // printf("err %f ",err_acc);
+      //   if(cc == 0){ 
+      //     err_min = err_acc; 
+      //     err_min_shr = shr;
+      //     shr -= 3; 
+      //     printf("set min : %f (shr=%d)\n",err_min,err_min_shr);
+      //   }
+      //   shr++;
+      //   if(err_acc < err_min){
+      //     err_min = err_acc;
+      //     err_min_shr = shr-1;
+      //     printf("min : %f (shr=%d)\n",err_min,err_min_shr);
+      //   }
+      //   if(cc == 6){
+      //     shr = err_min_shr;
+      //   }
+      // }
+      }else{
+        #pragma omp parallel for num_threads(4)
+        for(int n = 0; n<N; n++){
+          for(int m = 0; m<M; m++){
+            float temp = 0.0f;
+            for(int k = 0; k<K; k++){
+              temp += i2c_in[m*K + k] * we[n*K + k];
+            }
+            out[n*M + m] = temp;
+          }
+        }
+        
+        if (i_B != NULL){
+          // for(int mn = 0; mn < M*N; mn++){
+          //   o_Y->float_data[mn] += i_B->float_data[mn];
+          // }
+        }
+      }
+    }else{
+      // if (i_X->n_dims == 4 || i_X->n_dims == 2) {
+      //   //legacy code, almost untouched, fast for 2 and 4 dimension
+      //   //TODO replace, refactor
+      //   int64_t h_kernel = kernel_shape[0];
+      //   int64_t w_kernel = kernel_shape[1];
+      //   __attribute__((unused))
+      //   int64_t d_kernel = kernel_shape[2];
+      //   int64_t h_stride = strides[0];
+      //   int64_t w_stride = strides[1];
+      //   int64_t h_dilation = dilations[0];
+      //   int64_t w_dilation = dilations[1];
+      //   int64_t h_pad    = pads_begin[0];
+      //   int64_t w_pad    = pads_begin[1];
+      //   int b, i, j, k, m, n, d;
+      //   for(b = 0; b < o_Y->dims[0]; ++b){
+      //     for(k = 0; k < o_Y->dims[1]; ++k){
+      //       int g = (k/(o_Y->dims[1]/group));
+      //       TRACE_BOUND_FATAL(3, true, g, 0, (int)group, "%d");
+      //       for(i = 0; i < o_Y->dims[2]; ++i){
+      //         for(j = 0; j < o_Y->dims[3]; ++j){
+      //           // TODO replace all this calculations by macros?
+      //           uint64_t out_index = j + o_Y->dims[3]*(i + o_Y->dims[2]*(k + o_Y->dims[1]*b));
+      //           float value = 0;
+
+      //           if (i_X->n_dims == 4){
+      //             const int offset_in = g*(i_X->dims[3]*i_X->dims[2]*(i_X->dims[1]/group));
+      //             TRACE_VAR(4, true, offset_in, "%d");
+      //             for(d = 0; d < i_W->dims[1]; ++d){
+      //               for(n = 0; n < h_kernel; ++n){   // TODO use i_W->dims[2] instead?
+      //                 for(m = 0; m < w_kernel; ++m){ // TODO use i_W->dims[3] instead?
+      //                   int cur_h = i*h_stride + n * h_dilation - h_pad;
+      //                   int cur_w = j*w_stride + m * w_dilation - w_pad;
+
+      //                   /* This is hardcoded to make it work with mnist model, where
+      //                   the input is 1x1x28x28 */
+      //                   int index = offset_in + cur_w + i_X->dims[3]*(cur_h + i_X->dims[2]*(d + 0*i_X->dims[1]));
+      //                   //TRACE_LEVEL0("%d, %d, %d index=%d\n", d, cur_h, cur_w, index);
+
+      //                   int valid = (cur_h >= 0 && cur_h < i_X->dims[2] &&
+      //                               cur_w >= 0 && cur_w < i_X->dims[3]);
+      //                   TRACE_BOUND_FATAL(5, valid, index, 0, (int)i_X->n_float_data, "%d");
+      //                   float val = (valid != 0) ? i_X->float_data[index] : 0;
+      //                   int index_kernel = k*i_W->dims[3]*i_W->dims[2]*i_W->dims[1] + d*i_W->dims[3]*i_W->dims[2] + n*h_kernel + m; // change h_kernel by i_W->dims[x]
+      //                   value += val * i_W->float_data[index_kernel];
+      //                   //TRACE_LEVEL0("%fx%f+\n", val, i_W->float_data[index_kernel]);
+      //                 }
+      //               }
+      //             }
+      //           }else if (i_X->n_dims == 2){
+      //             const int offset_in = g*(i_X->dims[1]/group);
+      //             TRACE_VAR(4, true, offset_in, "%d");
+      //             for(n = 0; n < h_kernel; ++n){
+      //               for(m = 0; m < w_kernel; ++m){
+      //                 int cur_h = i*h_stride + n * h_dilation - h_pad;
+      //                 int cur_w = j*w_stride + m * w_dilation - w_pad;
+      //                 //printf("%d, %d\n", cur_h, cur_w);
+      //                 int index = offset_in + cur_w + i_X->dims[1]*cur_h;
+      //                 //printf("index=%d\n", index);
+      //                 int valid = (cur_h >= 0 && cur_h < i_X->dims[0] &&
+      //                             cur_w >= 0 && cur_w < i_X->dims[1]);
+      //                 TRACE_BOUND_FATAL(5, valid, index, 0, (int)i_X->n_float_data, "%d");
+      //                 float val = (valid != 0) ? i_X->float_data[index] : 0;
+      //                 int index_kernel = k*i_W->dims[3]*i_W->dims[2]*i_W->dims[1] + n*h_kernel + m;
+      //                 value += val * i_W->float_data[index_kernel];
+      //                 //TRACE_LEVEL0("%fx%f+\n", val, input[1]->float_data[index_kernel]);
+      //               }
+      //             }
+      //           }else{
+      //             /* TODO */
+      //           }
+      //           TRACE_BOUND_FATAL(4, true, (size_t)out_index, (size_t)0, o_Y->n_float_data, "%zu");
+      //           o_Y->float_data[out_index] = value;
+      //           //printf("%lld\n", out_index);
+      //           //printf("[%lld]=%f\n", out_index, value);
+
+      //           /* TODO This is a huge crap to make it work with tinyYOLO
+      //           It adds the bias, but this if will waste a lot of time. Make
+      //           this nice!
+      //           */
+      //           if (i_B != NULL){
+      //             o_Y->float_data[out_index] += i_B->float_data[k];
+      //           }
+      //         }
+      //       }
+      //     }
+      //   }
+      //   TRACE_EXIT(1);
+      //   return 0;
+      // }
+
+      // TRACE_WARN(0, true, "running generic implementation...slow!");
+
+      // // X : (B x C x D1 x D2 x ... )
+      // __attribute__((unused))
+      // int64_t B   = i_X->dims[0];
+      // int64_t C   = i_X->dims[1];
+
+      // // W : (M x C/group x K1 x K2 x ... )
+      // int64_t M  = i_W->dims[0];
+      // int64_t n_K = i_W->n_dims-2;
+
+      // index_ctx kernel_index;
+      // int64_t   kernel_indices[i_W->n_dims];
+      // int64_t   kernel_offsets[i_W->n_dims];
+      // index_init(&kernel_index, i_W->n_dims, i_W->dims, kernel_indices, kernel_offsets);
+
+      // index_ctx input_index;
+      // int64_t   input_indices[i_X->n_dims];
+      // int64_t   input_offsets[i_X->n_dims];
+      // index_init(&input_index, i_X->n_dims, i_X->dims, input_indices, input_offsets);
+
+      // index_ctx output_index;
+      // int64_t   output_indices[o_Y->n_dims];
+      // int64_t   output_offsets[o_Y->n_dims];
+      // index_init(&output_index, o_Y->n_dims, o_Y->dims, output_indices, output_offsets);
+
+      // do {
+      //   TRACE_INDEX(3, true, &output_index);
+      //   float value = i_B?i_B->float_data[index_get(&output_index, 1)]:0;
+      //   int64_t input_ch_offset = index_get(&output_index, 1)/(M/group);
+      //   TRACE_VAR(3, true, input_ch_offset, "%" PRId64);
+      //   index_set(&kernel_index, 0, index_get(&output_index, 1));
+      //   index_set(&input_index, 0, index_get(&output_index, 0));
+      //   for (int64_t ch = 0; ch < C/group; ch++) {
+      //     TRACE_BOUND(4, true, ch, (int64_t)0, C, "%" PRId64);
+      //     index_set(&kernel_index, 1, ch);
+      //     index_set(&input_index, 1, ch + input_ch_offset);
+      //     index_reset_sub(&kernel_index, 2);
+      //     do {
+      //       TRACE_INDEX(5, true, &kernel_index);
+      //       bool is_padded = false;
+      //       for (int i = 0; i < n_K; i++) {
+      //         int64_t input = 0;
+      //         input += index_get(&output_index, 2+i) * strides[i];
+      //         input += index_get(&kernel_index, 2+i) * dilations[i];
+      //         TRACE(6, true, "dim %d index %" PRId64 " valid in %" PRId64 ":%" PRId64 , 2+i, input, pads_begin[i], i_X->dims[2+i]);
+      //         if ( input < pads_begin[i] || input - pads_begin[i] >= i_X->dims[2+i]  ) {
+      //           is_padded = true;
+      //           TRACE(6, true, "dim %d index %" PRId64 " is padded, skipping", 2+i, input);
+      //           break;
+      //         }
+      //         index_set(&input_index, 2+i, input - pads_begin[i]);
+      //       }
+      //       if (is_padded) {
+      //         continue;
+      //       }
+      //       TRACE_INDEX(5, true, &input_index);
+      //       float   data_input = i_X->float_data[input_index.offset];
+      //       float   data_kernel = i_W->float_data[kernel_index.offset];
+      //       TRACE_VAR(5, true, data_input, "%f");
+      //       TRACE_VAR(5, true, data_kernel, "%f");
+      //       value +=  data_input * data_kernel;
+      //       TRACE_VAR(5, true, value, "%f");
+      //     } while(index_inc_sub(&kernel_index, 1));
+      //   }
+      //   TRACE(3, true, "writing value: %f @ %" PRId64, value, output_index.offset);
+      //   o_Y->float_data[output_index.offset] = value;
+      // } while (index_inc(&output_index));
     }
-    TRACE(3, true, "writing value: %f @ %" PRId64, value, output_index.offset);
-    o_Y->float_data[output_index.offset] = value;
-  } while (index_inc(&output_index));
-
     TRACE_EXIT(1);
-
+    end = clock();
+    cpu_time_used = ((double) (end - start)) / CLOCKS_PER_SEC;
+    printf("Predicted in %f seconds\n", cpu_time_used);
     /* CHANGE RETURN CODE IF THIS EXECUTER IS VALID */
     // return OP_ENOSYS;
     return OP_OK;
+}
+
+
+struct meta{
+  int M;
+  int K;
+  int N;
+  int MIDX;
+  int NIDX;
+  int K2048;
+  int SHR;
+};
+
+int gemm_core(void* par, VTACommandHandle cmdh)
+{
+  // loop ->               extent,                                 dst,                       src,                   wgt
+  // VTAUopPush(handle, mode, reset,  
+  //                                                            dstidx,                    srcidx,                wgtidx, 
+  //           opcode, useimm, immval)
+  struct meta* p = (struct meta*)(par);
+  VTAUopLoopBegin(cmdh, (p->K2048/16),                                   0,                        16,                     1);
+  VTAUopLoopBegin(cmdh,        16,                                   1,                         1,                     0);
+  VTAUopPush(cmdh,0,0,             16+(p->MIDX*(p->N/16) + p->NIDX)*16, 16, 16,  0,0,0);
+  VTAUopLoopEnd(cmdh);
+  VTAUopLoopEnd(cmdh);
+  return 0;
+}
+
+int finit_gemmgemm(void* par, VTACommandHandle cmdh )
+{
+  struct meta* p = (struct meta*)(par);
+  int init_num = p->N/16 * p->M / 16;
+  VTAUopLoopBegin(cmdh, 16,1,0,0);
+  for(int i=0; i<init_num; i++){
+    VTAUopPush(cmdh,0,1,INP_IDX+16*i,0,0,0,0,0);
+  }
+  // VTAUopPush(cmdh,0,1,INP_IDX,INP_IDX,WEIGHT_IDX,0,0,0);
+  VTAUopLoopEnd(cmdh);
+  return 0;
+}
+
+int alu_max(void *par, VTACommandHandle cmdh) {
+  struct meta* p = (struct meta*)(par);
+  int init_num = p->N/16 * p->M/16;
+  VTAUopLoopBegin(cmdh, 16, 1, 1, 0);
+  for(int i=0; i<init_num; i++){
+    VTAUopPush(cmdh, 1, 0, INP_IDX+16*i, 0, 0, 1, 1, -128);
+  }
+  VTAUopLoopEnd(cmdh);
+  return 0;
+}
+int alu_min(void *par, VTACommandHandle cmdh) {
+  struct meta* p = (struct meta*)(par);
+  int init_num = p->N/16 * p->M/16;
+  VTAUopLoopBegin(cmdh, 16, 1, 1, 0);
+  for(int i=0; i<init_num; i++){
+    VTAUopPush(cmdh, 1, 0, INP_IDX+16*i, 0, 0, 0, 1, 127);
+  }
+  VTAUopLoopEnd(cmdh);
+  return 0;
+}
+int alu_shr(void *par,VTACommandHandle cmdh) {
+  struct meta* p = (struct meta*)(par);
+  int init_num = p->N/16 * p->M/16;
+  VTAUopLoopBegin(cmdh, 16, 1, 1, 0);
+  for(int i=0; i<init_num; i++){
+    VTAUopPush(cmdh, 1, 0, INP_IDX+16*i, 0, 0, 3, 1, p->SHR);
+  }
+  VTAUopLoopEnd(cmdh);
+  return 0;
+}
+
+void vta_gemm(int M, int K, int N,
+        int8_t *A, float A_scale,
+        int8_t *B, float B_scale,
+        float *C,
+        int shr)
+{
+  
+  int m = M;
+  int n = N;
+  int k = K;
+  int input_size = M*K;
+  int weight_size = N*K;
+  int output_size = N*M;
+
+  float rng = 127.f;
+
+  int8_t *input  = (int8_t*)malloc(input_size);
+  int8_t *weight = (int8_t*)malloc(weight_size);
+  int8_t *output = (int8_t*)malloc(output_size);
+  int8_t *output_temp = (int8_t*)malloc(output_size);
+
+  // printf("scale in : %f scale we : %f ",scale_in, scale_we);
+  
+
+  /*     K
+   ┌  ─  ┬  ─  ┐
+   │  1  │  2  │
+  M├  ─  ┼  ─  ┫
+   │  3  │  4  │ M/16
+   └  ─  ┻  ─  ┘
+           K/16
+  */
+  //M/16,K/16,16,16
+#pragma omp parallel for
+  for(int i = 0 ; i < m/16; i++){
+    for(int j = 0 ; j < k/16; j++) {
+      for(int r = 0; r < 16; r++){
+        for(int s = 0; s < 16; s++){
+          int tmp_idx = (i*16 + r)*k + (j*16 + s);
+          int inp_idx = i*k/16*16*16 + j*16*16 + r*16+ s;
+          input[inp_idx] = A[tmp_idx];
+        }
+      }
+    }
+  }
+  
+  //N/16,K/16,16,16
+  #pragma omp parallel for
+  for(int i = 0 ; i < n/16; i++){
+    for(int j = 0 ; j < k/16; j++){
+      for(int r = 0; r < 16; r++){
+        for(int s = 0; s < 16; s++){
+          int tmp_idx = (i*16 + r)*k + (j*16 + s);
+          int wgt_idx = i*k/16*16*16 + j*16*16 + r*16+ s;
+          weight[wgt_idx] = B[tmp_idx];
+        }
+      }
+    }
+  }
+
+  void* input_buf  = VTABufferAlloc( input_size );
+  void* weight_buf = VTABufferAlloc( weight_size);
+  void* output_buf = VTABufferAlloc( output_size);
+  
+  VTABufferCopy(input, 0, input_buf, 0, m*k, 1);
+  VTABufferCopy(weight, 0, weight_buf, 0, n*k, 1);
+
+  VTAUopBufferReset(vtaCmdH);
+
+  uop_init[0] = nullptr;
+  uop_shr[0] = nullptr;
+  uop_max[0] = nullptr;
+  uop_min[0] = nullptr;
+
+
+  {
+
+    // VTASetDebugMode(vtaCmdH, VTA_DEBUG_DUMP_INSN | VTA_DEBUG_DUMP_UOP);
+
+
+    int k2048_loop = (k-1)/2048 + 1;
+    int m_div_loop = (m/16*n/16)/128;
+    int m_size;
+    if(m_div_loop == 0){
+      m_size = m;
+    }else{
+      m_size = m / m_div_loop;
+    }
+    m_div_loop += 1;    
+
+    struct meta par;
+    par.M = m_size;
+    par.K = k;
+    par.N = n;
+
+    void*** uop = (void***)malloc((m_size/16*n/16*k2048_loop) * sizeof(size_t));
+    for(int i =0; i<(m_size/16*n/16*k2048_loop); i++){
+      uop[i] = (void**)malloc(2  * sizeof(size_t));
+      uop[i][0] = nullptr;
+    }
+
+    for(int m_div = 0; m_div < m_div_loop; m_div++){
+
+      // printf("mdivloop : %d m_div :%d m_size : %d\n",m_div_loop,m_div,m_size);
+      //reset acc mem
+      VTAPushGEMMOp(vtaCmdH, uop_init, &finit_gemmgemm, &par, 0);
+
+      VTADepPush(vtaCmdH, 2, 1);    VTADepPop(vtaCmdH, 2, 1);
+      // run gemm
+      for(int i = 0; i < m_size/16; i++){
+        
+        for(int k_div = 0; k_div < k2048_loop; k_div++){  
+          int k2048 = 2048;
+          if(k%2048 != 0 && k2048_loop == k_div+1){
+            k2048 = k % 2048;
+          }
+
+          // VTADepPush(vtaCmdH, 2, 1);    VTADepPop(vtaCmdH, 2, 1);
+          int in_16_K     = 16 * k/16;
+          int in_16_K2048 = 16 * k2048/16;
+          VTALoadBuffer2D(vtaCmdH, input_buf,  m_div*m_size*in_16_K/16 + in_16_K*i + k_div*2048,  in_16_K2048,  1, 1, 0, 0, 0, 0, INP_IDX, 2);
+          // printf("in offset = %d\n",in_16_K*i + k_div*2048*16);
+          // VTADepPush(vtaCmdH, 1, 2);    VTADepPop(vtaCmdH, 1, 2);
+
+          for(int j = 0; j < n/16; j++){
+            par.MIDX = i;
+            par.NIDX = j;
+            // printf("i, j = %d, %d\n", i,j);
+            // VTADepPush(vtaCmdH, 2, 1);    VTADepPop(vtaCmdH, 2, 1);
+            // int wg_N_K_d1616 = k/16 * n*16;
+            int wg_16_K     = k/16;
+            int wg_16_K2048 = k2048/16;
+            par.K2048 = k2048;
+            // printf("k2048 %d / range %d?\n",par.K2048,wg_16_K2048);
+            VTALoadBuffer2D(vtaCmdH, weight_buf, wg_16_K*j + 2048/16*k_div,  wg_16_K2048, 1, 1, 0, 0, 0, 0, WEIGHT_IDX, 1);
+            // printf("we offset = %d\n",wg_16_K*j + 2048*k_div);
+            VTADepPush(vtaCmdH, 1, 2);    VTADepPop(vtaCmdH, 1, 2);
+            
+            VTAPushGEMMOp(vtaCmdH, uop[k_div*m_size/16*n/16 + i*n/16 +j], &gemm_core, &par, 0);
+            // if(k2048 < 2048){
+            //   printf("2048 routine\n");
+            VTADepPush(vtaCmdH, 2, 1);    VTADepPop(vtaCmdH, 2, 1);  
+            // }else{
+            //   VTAPushGEMMOp(vtaCmdH, uop[k_div*m/16*n/16 + i*n/16 +j], &gemm2_2, &par, 0);
+            // }
+            // VTAPushGEMMOp(vtaCmdH, uopHandle2, &gemm2_2, &par, 0);
+          }
+        }
+      }
+      VTADepPush(vtaCmdH, 1, 2);    VTADepPop(vtaCmdH, 1, 2);
+      par.SHR = shr;
+      VTAPushALUOp(vtaCmdH, uop_shr, &alu_shr, &par, 0);
+      VTAPushALUOp(vtaCmdH, uop_max, &alu_max, &par, 0);
+      VTAPushALUOp(vtaCmdH, uop_min, &alu_min, &par, 0);
+
+      VTADepPush(vtaCmdH, 2, 3);    VTADepPop(vtaCmdH, 2, 3);
+
+      // store stage-1 result
+      int ou_M_N_d16 = m_size * n/16;
+      VTAStoreBuffer2D(vtaCmdH, OUT_IDX, 4, output_buf, m_div*m_size*n/16, ou_M_N_d16, 1, 1);
+      VTADepPush(vtaCmdH, 3, 2);    VTADepPop(vtaCmdH, 3, 2);  
+    }
+
+    VTASynchronize(vtaCmdH, 1 << 31);
+  }
+
+  VTABufferCopy(output_buf, 0, output, 0, output_size, 2);  // 1 MemCopyToHost
+
+#pragma omp parallel for
+  for(int i = 0 ; i < m/16; i++){
+    for(int j = 0 ; j < n/16; j++) {
+      for(int r = 0; r < 16; r++){
+        for(int s = 0; s < 16; s++){
+          int tmp_idx = i*n/16*16*16 + j*16*16 + r*16+ s;
+          int out_idx = (i*16 + r)*n + (j*16 + s);
+          output_temp[out_idx] = output[tmp_idx];
+        }
+      }
+    }
+  }
+  
+  // for(int i = 0; i<100; i++){
+  //   printf("(%d)",output[i]);
+  // }
+
+
+  // float deq_scale = 1.f / scale_we * 1.f / scale_in;
+  // float max_c = 0.0f;
+#pragma omp parallel for
+  for(int i = 0; i < m; i++){
+    for(int j = 0; j < n; j++){
+      C[j*m + i] = (float)((int)output_temp[i*n + j]<<shr) * A_scale * B_scale;
+      // if(fabs(C[j*m + i]) > max_c){
+      //   max_c = fabs(C[j*m + i]);
+      // }
+    }
+  }
+  // printf(" max c  = %f\n", max_c);  
+  // printf("%d layer A max = ( precomputed ) B max = ( %f ~ [%f] ~ %f) shr = %d ",layer_num, maxB_neg, maxB, maxB_pos, shr);
+
+  
+  free(input);
+  free(weight);
+  free(output);
+  free(output_temp);
+  // free(input_temp);
+  // // free(weight_temp);
+  
+
+  // VTABufferFree( input_buf );
+  // VTABufferFree( output_buf);
+  // VTABufferFree( weight_buf);
+
 }

@@ -31,11 +31,11 @@ void mallocTensorProto(Onnx__TensorProto *tp,
 
 void init_tensor_proto(Onnx__TensorProto *tp);
 
-size_t strnlen(const char *src, size_t length);
-char*  strndup(const char *src, size_t length);
-char*  strdup(const char *src);
+// size_t strnlen(const char *src, size_t length);
+// char*  strndup(const char *src, size_t length);
+// char*  strdup(const char *src);
 void*  memdup(const void *src, size_t size);
-#define ARRAYDUP(SRC, LENGTH) memdup(SRC, sizeof((SRC)[0])*(LENGTH))
+#define ARRAYDUP(SRC, LENGTH) (int64_t*)memdup(SRC, sizeof((SRC)[0])*(LENGTH))
 
 void* mallocTensorData(Onnx__TensorProto *dst);
 void* freeTensorData(Onnx__TensorProto *dst);

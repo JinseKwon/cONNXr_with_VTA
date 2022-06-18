@@ -38,7 +38,7 @@ prepare_operator__ai_onnx__matmul__9(
 
     o_Y->has_raw_data = 0;
     o_Y->n_dims       = 2;
-    o_Y->dims         = malloc(o_Y->n_dims*sizeof(int64_t));
+    o_Y->dims         = (int64_t*)malloc(o_Y->n_dims*sizeof(int64_t));
     o_Y->dims[0]      = i_A->dims[0];
     o_Y->dims[1]      = i_B->dims[1];
     o_Y->data_type    = i_A->data_type;

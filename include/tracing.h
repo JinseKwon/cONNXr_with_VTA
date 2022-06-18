@@ -390,7 +390,7 @@ static
 int
 _trace_severity(const char* overrides, const char *identifier) {
     if ( overrides == NULL || identifier == NULL ) return 0;
-    char *start = strstr(overrides,identifier);
+    char *start = (char*)strstr(overrides,identifier);
     if (!start) return 0;
     char *colon = start + strlen(identifier);
     if (*colon != ':') return 0;

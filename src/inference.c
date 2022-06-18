@@ -26,10 +26,10 @@ void resolve(Onnx__ModelProto *model,
     all_context[nodeIdx].onnx_node = model->graph->node[nodeIdx];
 
     // Search the inputs for a node
-    all_context[nodeIdx].inputs = malloc(sizeof(Onnx__TensorProto) * model->graph->node[nodeIdx]->n_input);
+    all_context[nodeIdx].inputs = (Onnx__TensorProto**)malloc(sizeof(Onnx__TensorProto) * model->graph->node[nodeIdx]->n_input);
     for (int i = 0; i < model->graph->node[nodeIdx]->n_input; i++)
     {
-      all_context[nodeIdx].inputs[i] = malloc(sizeof(Onnx__TensorProto));
+      all_context[nodeIdx].inputs[i] = (Onnx__TensorProto*)malloc(sizeof(Onnx__TensorProto));
       all_context[nodeIdx].inputs[i] = searchTensorProtoByName(model, inputs, nInputs, model->graph->node[nodeIdx]->input[i]);
       if (all_context[nodeIdx].inputs[i] && all_context[nodeIdx].inputs[i]->has_raw_data){
         /* If the tensor has raw data, deserialize it */
@@ -40,10 +40,10 @@ void resolve(Onnx__ModelProto *model,
     }
 
     // Allocate memory for future outputs and set the name
-    all_context[nodeIdx].outputs = malloc(sizeof(Onnx__TensorProto) * model->graph->node[nodeIdx]->n_output);
+    all_context[nodeIdx].outputs = (Onnx__TensorProto**)malloc(sizeof(Onnx__TensorProto) * model->graph->node[nodeIdx]->n_output);
     for (int i = 0; i < model->graph->node[nodeIdx]->n_output; i++)
     {
-      all_context[nodeIdx].outputs[i] = malloc(sizeof(Onnx__TensorProto));
+      all_context[nodeIdx].outputs[i] = (Onnx__TensorProto*)malloc(sizeof(Onnx__TensorProto));
       init_tensor_proto(all_context[nodeIdx].outputs[i]);
       all_context[nodeIdx].outputs[i]->name = strdup(model->graph->node[nodeIdx]->output[i]);
 
@@ -62,6 +62,8 @@ void resolve(Onnx__ModelProto *model,
     size_t version = 12;
     operator_preparer prepare = operator_set_find_preparer(model->graph->node[nodeIdx]->op_type, version);
     TRACE_FATAL(0, !prepare, "No prepare function could be found for operator '%s' version '%zu'", model->graph->node[nodeIdx]->op_type, version);
+    // printf("No prepare function could be found for operator '%s' version '%zu'\n", model->graph->node[nodeIdx]->op_type, version);
+    fflush(stdout);
     prepare(&all_context[nodeIdx]);
     _populatedIdx++;
   }
@@ -77,6 +79,8 @@ Onnx__TensorProto** inference(Onnx__ModelProto *model, Onnx__TensorProto **input
   for (int nodeIdx = 0; nodeIdx < model->graph->n_node; nodeIdx++)
   {
     TRACE(1, true, "Running node %d, operator=%s", nodeIdx, model->graph->node[nodeIdx]->op_type);
+    printf("Running node %d, operator=%s\n", nodeIdx, model->graph->node[nodeIdx]->op_type);
+    fflush(stdout);
     all_context[nodeIdx].executer(&all_context[nodeIdx]);
   }
 

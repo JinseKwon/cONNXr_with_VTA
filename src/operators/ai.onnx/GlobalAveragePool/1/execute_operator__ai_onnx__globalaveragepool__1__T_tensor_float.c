@@ -32,7 +32,7 @@ execute_operator__ai_onnx__globalaveragepool__1__T_tensor_float(
       cardinality *= i_X->dims[i];
     }
 
-    o_Y->float_data = malloc(o_Y->n_float_data * sizeof(float));
+    o_Y->float_data = (float*)malloc(o_Y->n_float_data * sizeof(float));
     for (int n = 0; n < i_X->dims[0]; n++) {
         for (int c = 0; c < i_X->dims[1]; c++) {
             int offset = n*i_X->dims[1]*cardinality + c*cardinality;

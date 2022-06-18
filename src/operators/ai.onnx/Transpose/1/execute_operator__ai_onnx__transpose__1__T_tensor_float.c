@@ -19,7 +19,7 @@ execute_operator__ai_onnx__transpose__1__T_tensor_float(
 
     TRACE_TENSOR(2, true, i_data);
 
-    context_operator__ai_onnx__transpose__1 *op_ctx = ctx->executer_context;
+    context_operator__ai_onnx__transpose__1 *op_ctx = (context_operator__ai_onnx__transpose__1*)ctx->executer_context;
 
     size_t n_perm = op_ctx->n_perm;
     int64_t* perm = op_ctx->perm;

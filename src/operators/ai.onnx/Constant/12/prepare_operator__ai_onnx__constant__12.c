@@ -2,6 +2,8 @@
 #include "operator__ai_onnx__constant__12.h"
 #include "tracing.h"
 #include "utils.h"
+#include <stdio.h>
+// #include <stdlib.h>
 #include <string.h>
 
 operator_status

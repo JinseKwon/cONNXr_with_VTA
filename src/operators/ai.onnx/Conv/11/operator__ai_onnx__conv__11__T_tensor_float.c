@@ -154,7 +154,7 @@ operator__ai_onnx__conv__11__T_tensor_float(
   TRACE_FATAL(0, group != _group, "mismatch of supplied group (%" PRId64 ") and calculated group (%" PRId64 ")", _group, group);
 
   t_Y->n_dims = t_W->n_dims;
-  t_Y->dims   = malloc(t_Y->n_dims * sizeof(int64_t));
+  t_Y->dims   = (int64_t*)malloc(t_Y->n_dims * sizeof(int64_t));
 
   t_Y->dims[0] = B;
   t_Y->dims[1] = M;
@@ -171,7 +171,7 @@ operator__ai_onnx__conv__11__T_tensor_float(
   for (int i = 0; i < t_Y->n_dims; i++) {
     t_Y->n_float_data *= t_Y->dims[i];
   }
-  t_Y->float_data   = malloc(t_Y->n_float_data * sizeof(float));
+  t_Y->float_data   = (float*)malloc(t_Y->n_float_data * sizeof(float));
 
   TRACE_TENSOR(2, true, t_Y);
 
@@ -268,7 +268,7 @@ operator__ai_onnx__conv__11__T_tensor_float(
       }
     }
     TRACE_EXIT(1);
-    return 0;
+    // return;
   }
 
   TRACE_WARN(0, true, "running generic implementation...slow!");
@@ -332,5 +332,5 @@ operator__ai_onnx__conv__11__T_tensor_float(
   } while (index_inc(&output_index));
 
   TRACE_EXIT(1);
-  return 0;
+  // return;
 }

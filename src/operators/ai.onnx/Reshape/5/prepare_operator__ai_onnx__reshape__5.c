@@ -36,7 +36,7 @@ prepare_operator__ai_onnx__reshape__5(
     o_reshaped->has_raw_data = 0;
     o_reshaped->data_type    = i_data->data_type;
     o_reshaped->n_dims       = i_shape->n_int64_data;
-    o_reshaped->dims         = malloc(o_reshaped->n_dims * sizeof(int64_t));
+    o_reshaped->dims         = (int64_t*)malloc(o_reshaped->n_dims * sizeof(int64_t));
 
     // Note that the dimension that is applied is encoded as a
     // int64 field. So shape its assumed to have data_type int64

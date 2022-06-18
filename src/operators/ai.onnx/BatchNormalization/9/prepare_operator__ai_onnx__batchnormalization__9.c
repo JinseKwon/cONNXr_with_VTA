@@ -45,7 +45,7 @@ prepare_operator__ai_onnx__batchnormalization__9(
     // float default_momentum = ;
 
     context_operator__ai_onnx__batchnormalization__9 *op_ctx = NULL;
-    op_ctx = malloc(sizeof(context_operator__ai_onnx__batchnormalization__9));
+    op_ctx = (context_operator__ai_onnx__batchnormalization__9*)malloc(sizeof(context_operator__ai_onnx__batchnormalization__9));
     TRACE_FATAL(0 , !op_ctx, "could not allocate executer_context");
 
     op_ctx->epsilon = a_epsilon?a_epsilon->f:default_epsilon;

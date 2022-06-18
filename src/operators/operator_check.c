@@ -5,7 +5,7 @@
 #include <string.h>
 
 static bool
-operator_check_range_(char                *operator,
+operator_check_range_(char                *operators,
                       char                *name,
                       operator_info_range *info,
                       size_t               number)
@@ -14,7 +14,7 @@ operator_check_range_(char                *operator,
     fprintf(stderr,
             "%s:%s input number is too small! "
             "expected at least %zu, but got %zu\n",
-            operator,
+            operators,
             name,
             info->min,
             number);
@@ -24,7 +24,7 @@ operator_check_range_(char                *operator,
     fprintf(stderr,
             "%s:%s input number is too large! "
             "expected at most %zu, but got %zu\n",
-            operator,
+            operators,
             name,
             info->max,
             number);
@@ -36,7 +36,8 @@ operator_check_range_(char                *operator,
 bool
 operator_check_range(node_context *ctx, operator_info *info)
 {
-  char *name = (ctx->onnx_node->name) ? ctx->onnx_node->name : "";
+  char noname[10] = "";
+  char *name = (ctx->onnx_node->name) ? ctx->onnx_node->name : noname;
   bool valid = true;
   valid &= operator_check_range_(info->name,
                                  name,
@@ -52,7 +53,8 @@ operator_check_range(node_context *ctx, operator_info *info)
 bool
 operator_check_attributes(node_context *ctx, operator_info *info)
 {
-  char *name = (ctx->onnx_node->name) ? ctx->onnx_node->name : "";
+  char noname[10] = "";
+  char *name = (ctx->onnx_node->name) ? ctx->onnx_node->name : noname;
   for (size_t i_attr = 0; i_attr < info->n_attribute; i_attr++) {
     operator_info_attribute* cond = &info->attribute[i_attr];
     Onnx__AttributeProto* cattr = ctx->onnx_node->attribute[i_attr];
@@ -95,7 +97,7 @@ operator_check_attributes(node_context *ctx, operator_info *info)
 }
 
 static bool
-operator_check_tensor_type(char                  *operator,
+operator_check_tensor_type(char                  *operators,
                            char                  *name,
                            Onnx__TensorProto     *tensor,
                            size_t                 pos,
@@ -112,7 +114,7 @@ operator_check_tensor_type(char                  *operator,
     fprintf(stderr,
             "%s:%s tensor '%s' ('%s') at pos %zu has wrong type! "
             "got '%s', but expected one of ",
-            operator,
+            operators,
             name,
             info->name,
             tensor->name,
@@ -132,7 +134,7 @@ operator_check_tensor_type(char                  *operator,
 }
 
 static bool
-operator_check_tensors_(char                  *operator,
+operator_check_tensors_(char                  *operators,
                         char                  *name,
                         size_t                 n_tensor,
                         Onnx__TensorProto    **tensor,
@@ -148,13 +150,13 @@ operator_check_tensors_(char                  *operator,
       }
       fprintf(stderr,
               "%s:%s did not found non-optional tensor '%s' at pos %zu!\n",
-              operator,
+              operators,
               name,
               cond->name,
               i_tensor);
       return false;
     }
-    bool valid = operator_check_tensor_type(operator,
+    bool valid = operator_check_tensor_type(operators,
                                             name,
                                             ctensor,
                                             i_tensor,
@@ -179,7 +181,7 @@ operator_check_tensors_(char                  *operator,
       fprintf(stderr,
               "%s:%s tensor '%s' ('%s') at pos %zu has wrong type! "
               "got '%s', but expected homogeneous one '%s'\n",
-              operator,
+              operators,
               name,
               cond->name,
               ctensor->name,
@@ -188,7 +190,7 @@ operator_check_tensors_(char                  *operator,
               operator_info_tensorType2str(type));
       return false;
     } else {
-      bool valid = operator_check_tensor_type(operator,
+      bool valid = operator_check_tensor_type(operators,
                                               name,
                                               ctensor,
                                               i_tensor,
@@ -205,7 +207,8 @@ operator_check_tensors_(char                  *operator,
 bool
 operator_check_tensors(node_context *ctx, operator_info *info)
 {
-  char *name = (ctx->onnx_node->name) ? ctx->onnx_node->name : "";
+  char noname[10] = "";
+  char *name = (ctx->onnx_node->name) ? ctx->onnx_node->name : noname;
   bool valid = true;
   valid &= operator_check_tensors_(info->name,
                                    name,
@@ -225,7 +228,8 @@ operator_check_tensors(node_context *ctx, operator_info *info)
 bool
 operator_check_constraint(node_context *ctx, operator_info *info)
 {
-  char *name = (ctx->onnx_node->name) ? ctx->onnx_node->name : "";
+  char noname[10] = "";
+  char *name = (ctx->onnx_node->name) ? ctx->onnx_node->name : noname;
 
   for (size_t i_cons = 0; i_cons < info->n_constraint; i_cons++) {
     operator_info_constraint *constraint = &info->constraint[i_cons];

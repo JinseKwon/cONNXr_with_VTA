@@ -43,7 +43,7 @@ execute_operator__ai_onnx__softmax__11__T_tensor_float(
 
     TRACE_TENSOR(2, true, i_input);
 
-    context_operator__ai_onnx__softmax__11 *op_ctx = ctx->executer_context;
+    context_operator__ai_onnx__softmax__11 *op_ctx = (context_operator__ai_onnx__softmax__11*)ctx->executer_context;
 
     // int64_t axis = op_ctx->axis;
     int64_t N = op_ctx->N;

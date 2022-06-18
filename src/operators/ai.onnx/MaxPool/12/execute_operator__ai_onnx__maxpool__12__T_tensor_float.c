@@ -18,7 +18,7 @@ execute_operator__ai_onnx__maxpool__12__T_tensor_float(
 
     TRACE_TENSOR(2, true, i_X);
 
-    context_operator__ai_onnx__maxpool__12 *op_ctx = ctx->executer_context;
+    context_operator__ai_onnx__maxpool__12 *op_ctx = (context_operator__ai_onnx__maxpool__12*)ctx->executer_context;
 
     __attribute__((unused))
     char* auto_pad = op_ctx->auto_pad;

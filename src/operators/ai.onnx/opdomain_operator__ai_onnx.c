@@ -10,17 +10,20 @@ extern operator_set_opname opname_operator__ai_onnx__clip;
 extern operator_set_opname opname_operator__ai_onnx__elu;
 extern operator_set_opname opname_operator__ai_onnx__relu;
 extern operator_set_opname opname_operator__ai_onnx__conv;
+extern operator_set_opname opname_operator__ai_onnx__gemm;
 extern operator_set_opname opname_operator__ai_onnx__argmax;
 extern operator_set_opname opname_operator__ai_onnx__add;
 extern operator_set_opname opname_operator__ai_onnx__leakyrelu;
 extern operator_set_opname opname_operator__ai_onnx__reshape;
 extern operator_set_opname opname_operator__ai_onnx__globalaveragepool;
+extern operator_set_opname opname_operator__ai_onnx__averagepool;
 extern operator_set_opname opname_operator__ai_onnx__mul;
 extern operator_set_opname opname_operator__ai_onnx__constant;
 extern operator_set_opname opname_operator__ai_onnx__batchnormalization;
 extern operator_set_opname opname_operator__ai_onnx__sigmoid;
 extern operator_set_opname opname_operator__ai_onnx__softmax;
 extern operator_set_opname opname_operator__ai_onnx__convtranspose;
+extern operator_set_opname opname_operator__ai_onnx__flatten;
 
 operator_set_opdomain opdomain_operator__ai_onnx = {
     .name = "ai.onnx",
@@ -33,17 +36,20 @@ operator_set_opdomain opdomain_operator__ai_onnx = {
         &opname_operator__ai_onnx__elu,
         &opname_operator__ai_onnx__relu,
         &opname_operator__ai_onnx__conv,
+        &opname_operator__ai_onnx__gemm,
         &opname_operator__ai_onnx__argmax,
         &opname_operator__ai_onnx__add,
         &opname_operator__ai_onnx__leakyrelu,
         &opname_operator__ai_onnx__reshape,
         &opname_operator__ai_onnx__globalaveragepool,
+        &opname_operator__ai_onnx__averagepool,
         &opname_operator__ai_onnx__mul,
         &opname_operator__ai_onnx__constant,
         &opname_operator__ai_onnx__batchnormalization,
         &opname_operator__ai_onnx__sigmoid,
         &opname_operator__ai_onnx__softmax,
         &opname_operator__ai_onnx__convtranspose,
+        &opname_operator__ai_onnx__flatten,
         NULL
     }
 };

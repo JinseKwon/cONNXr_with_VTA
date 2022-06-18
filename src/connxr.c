@@ -5,6 +5,7 @@
 #include <time.h>
 
 #include "onnx.pb-c.h"
+#include "trace.h"
 #include "tracing.h"
 #include "inference.h"
 #include "utils.h"
@@ -31,7 +32,7 @@ int main(int argc, char **argv){
   if (inp0set0 != NULL){printf("ok!\n");}
   TRACE_TENSOR(2, true, inp0set0);
 
-  //Debug_PrintModelInformation(model);
+  // Debug_PrintModelInformation(model);
   //debug_prettyprint_model(model);
   convertRawDataOfTensorProto(inp0set0);
 

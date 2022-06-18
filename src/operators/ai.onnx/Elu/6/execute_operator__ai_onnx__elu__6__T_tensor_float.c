@@ -19,7 +19,7 @@ execute_operator__ai_onnx__elu__6__T_tensor_float(
 
     TRACE_TENSOR(2, true, i_X);
 
-    context_operator__ai_onnx__elu__6 *op_ctx = ctx->executer_context;
+    context_operator__ai_onnx__elu__6 *op_ctx = (context_operator__ai_onnx__elu__6*)ctx->executer_context;
 
     float alpha = op_ctx->alpha;
 

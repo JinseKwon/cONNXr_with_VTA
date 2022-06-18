@@ -29,7 +29,7 @@ prepare_operator__ai_onnx__softmax__11(
     int64_t default_axis = 1;
 
     context_operator__ai_onnx__softmax__11 *op_ctx = NULL;
-    op_ctx = malloc(sizeof(context_operator__ai_onnx__softmax__11));
+    op_ctx = (context_operator__ai_onnx__softmax__11*) malloc(sizeof(context_operator__ai_onnx__softmax__11));
     TRACE_FATAL(0 , !op_ctx, "could not allocate executer_context");
 
     op_ctx->axis = a_axis?a_axis->i:default_axis;

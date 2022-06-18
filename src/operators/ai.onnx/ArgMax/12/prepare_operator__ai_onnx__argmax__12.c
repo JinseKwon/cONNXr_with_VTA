@@ -49,7 +49,7 @@ prepare_operator__ai_onnx__argmax__12(
     /* INITIALIZE OUTPUTS DATA_TYPE AND SHAPE HERE */
 
     // Allocate memory
-    o_reduced->dims = malloc(i_data->dims[1] * sizeof(int64_t));
+    o_reduced->dims = (int64_t*)malloc(i_data->dims[1] * sizeof(int64_t));
 
     // Populate some parameters
     o_reduced->n_dims       = 1;
